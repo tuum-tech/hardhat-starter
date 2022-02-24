@@ -7,17 +7,18 @@ pragma solidity ^0.8.0;
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 import '@openzeppelin/contracts/access/Ownable.sol';
+import '@openzeppelin/contracts/utils/Strings.sol';
 import './interfaces/IOldBunnyPunk.sol';
 import './interfaces/INewBunnyPunk.sol';
 
 contract PhantzSwap is Ownable {
     IOldBunnyPunk public oldBunnyPunk;
     INewBunnyPunk public newBunnyPunk;
-    uint256 public mintedBunnyBunks;
+    uint256 public lastMintedTokenID;
     string private baseURI;
 
     // Events
-    event NewBunnyPunksMinted(address _to, uint256 _mintedBunnyPunks, uint256 _blockNumber);
+    event NewBunnyPunksMinted(address _to, uint256 _tokenID, uint256 _blockNumber);
     event Swapped(uint256 _tokenId, address _user, uint256 _blockNumber);
     event BatchSwapped(uint256[] _tokenIds, address _user);
     event BunnyPunkOwnerShipTransfered(address _enwOwner, uint256 blockNumber);
@@ -39,35 +40,35 @@ contract PhantzSwap is Ownable {
     }
 
     function _tokenURI(uint256 _tokenId) internal view returns (string memory) {
-        return string(abi.encodePacked(baseURI, _tokenId, '.json'));
+        return string(abi.encodePacked(baseURI, Strings.toString(_tokenId), '.json'));
     }
 
-    /// @dev mint new BunnyPunk
+    /// @dev _mint mint new BunnyPunk
     /// @param _to address that will receive minted BunnyPunk
-    /// @param _tokenID tokenID
     /// @notice internal function to mint new BunnyPunk
-    function _mint(address _to, uint256 _tokenID) internal {
+    function _mint(address _to) internal {
         (bool success, ) = address(newBunnyPunk).call{value: newBunnyPunk.platformFee()}(
-            abi.encodeWithSignature('mint(addres,string)', _to, _tokenURI(_tokenID))
+            abi.encodeWithSignature('mint(addres,string)', _to, _tokenURI(lastMintedTokenID + 1))
         );
         require(success, 'Mint Failed');
+
+        lastMintedTokenID++;
+        emit NewBunnyPunksMinted(_to, lastMintedTokenID, block.number);
     }
 
-    /// @dev mintNewBunnyPunksForSwap from 1 ~ 690
+    /// @dev mintNewBunnyPunksForSwap from
+    /// @param _count number of BunnyPunks to mint = 690
     /// @notice before call this function, the ownership of new BunnyPunk should be transferred to this address
-    function mintNewBunnyPunksForSwap() external onlyOwner {
-        require(newBunnyPunk.totalSupply() == 0, 'New BunnyPunk already minted');
-
+    function mintNewBunnyPunksForSwap(uint256 _count) external onlyOwner {
+        require(_count > 0, 'Invalid Count');
         require(
-            address(this).balance >= (newBunnyPunk.platformFee()) * 690,
+            address(this).balance >= (newBunnyPunk.platformFee()) * _count,
             'Insufficient funds to mint'
         );
-        for (uint256 i = 0; i < 690; i++) {
-            _mint(address(this), i);
-        }
-        mintedBunnyBunks = 690;
 
-        emit NewBunnyPunksMinted(address(this), mintedBunnyBunks, block.number);
+        for (uint256 i = 0; i < _count; i++) {
+            _mint(address(this));
+        }
     }
 
     /// @dev setApprovalOldBunnyPunksForAll
@@ -81,23 +82,18 @@ contract PhantzSwap is Ownable {
 
     /// @dev mint new BunnyPunk
     function mint() external payable {
-        require(newBunnyPunk.totalSupply() >= 690, 'mintNewBunnyPunksForSwap not called yet');
-        require(newBunnyPunk.totalSupply() <= 2280, 'All PunnyPunks are mintted');
+        require(lastMintedTokenID >= 690, 'mintNewBunnyPunksForSwap not called yet');
+        require(lastMintedTokenID <= 2280, 'All PunnyPunks are mintted');
+        require(msg.value >= newBunnyPunk.platformFee(), 'Insufficient funds to mint.');
 
-        uint256 platformFee = newBunnyPunk.platformFee();
-        require(msg.value >= platformFee, 'Insufficient funds to mint.');
-
-        _mint(msg.sender, mintedBunnyBunks);
-        mintedBunnyBunks++;
-
-        emit NewBunnyPunksMinted(address(this), 1, block.number);
+        _mint(msg.sender);
     }
 
     /// @dev batchSwap BunnyPunks
     /// @param _tokenIds to be swapped
     function batchSwap(uint256[] memory _tokenIds) external {
         require(_tokenIds.length > 0, 'Invalid TokenIds');
-        require(oldBunnyPunk.isApprovedForAll(msg.sender, address(this)), 'Not approved yet');
+        require(_tokenIds.length <= lastMintedTokenID, 'Too much Tokens');
 
         for (uint256 i = 0; i < _tokenIds.length; i++) {
             swap(_tokenIds[i], msg.sender);
@@ -131,11 +127,8 @@ contract PhantzSwap is Ownable {
     /// @dev transferNewBunnyPunk
     /// @notice this will transfer unswaped new BunnyPunk
     function transferNewBunnyPunk(uint256 _tokenId, address _to) public onlyOwner {
-        require(
-            newBunnyPunk.ownerOf(_tokenId) == address(this),
-            'No new BunnyPunk for this tokenID'
-        );
         require(_to != address(0), 'Invalid User');
+        require(newBunnyPunk.ownerOf(_tokenId) == address(this), 'No BunnyPunk');
 
         newBunnyPunk.transferFrom(address(this), _to, _tokenId);
         emit BunnyPunkTransfered(_tokenId, address(this), _to, block.number);
@@ -150,12 +143,13 @@ contract PhantzSwap is Ownable {
         emit BunnyPunkOwnerShipTransfered(_newOwner, block.number);
     }
 
-    /// @dev withdrawRemainingEther
-    /// @notice this will withdraw all remaining ether
-    function withdrawRemainingEther(address payable _to) external onlyOwner {
+    /// @dev withdrawRemainingBalance
+    /// @notice this will withdraw all remaining balance
+    function withdrawRemainingBalance(address payable _to) external onlyOwner {
         require(_to != address(0), 'Invalid address');
-
         uint256 remainingBalance = address(this).balance;
+        require(remainingBalance > 0, 'No balance');
+
         (bool success, ) = _to.call{value: remainingBalance}('');
         require(success, 'Transfer failed');
 

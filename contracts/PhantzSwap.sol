@@ -11,51 +11,86 @@ import './interfaces/IOldBunnyPunk.sol';
 import './interfaces/INewBunnyPunk.sol';
 
 contract PhantzSwap is Ownable {
-    IOldBunnyPunk oldBunnyPunk;
-    INewBunnyPunk newBunnyPunk;
-    bool public isNewBunnyPunkMinted;
+    IOldBunnyPunk public oldBunnyPunk;
+    INewBunnyPunk public newBunnyPunk;
+    uint256 public mintedBunnyBunks;
+    string private baseURI;
 
     // Events
-    event NewBunnyPunksMinted(address _to, uint256 _mintedNFTs, uint256 _blockNumber);
+    event NewBunnyPunksMinted(address _to, uint256 _mintedBunnyPunks, uint256 _blockNumber);
     event Swapped(uint256 _tokenId, address _user, uint256 _blockNumber);
     event BatchSwapped(uint256[] _tokenIds, address _user);
     event BunnyPunkOwnerShipTransfered(address _enwOwner, uint256 blockNumber);
     event BunnyPunkTransfered(uint256 _tokenId, address _from, address _to, uint256 blockNumber);
     event SetApprovalOldBunnyPunk(address _user, bool _approved, uint256 blockNumber);
+    event WithdrawRemainingBalance(address _to, uint256 _balance, uint256 blockNumber);
 
-    constructor(IOldBunnyPunk _oldBunnyPunk, INewBunnyPunk _newBunnyPunk) {
+    constructor(
+        IOldBunnyPunk _oldBunnyPunk,
+        INewBunnyPunk _newBunnyPunk,
+        string memory _baseURI
+    ) {
         require(address(_oldBunnyPunk) != address(0), 'Invalid old Buunny Punk');
         require(address(_newBunnyPunk) != address(0), 'Invalid new Buunny Punk');
+
         oldBunnyPunk = _oldBunnyPunk;
         newBunnyPunk = _newBunnyPunk;
+        baseURI = _baseURI;
     }
 
-    /// @dev setApprovalOldNFTsForAll
+    function _tokenURI(uint256 _tokenId) internal view returns (string memory) {
+        return string(abi.encodePacked(baseURI, _tokenId, '.json'));
+    }
+
+    /// @dev mint new BunnyPunk
+    /// @param _to address that will receive minted BunnyPunk
+    /// @param _tokenID tokenID
+    /// @notice internal function to mint new BunnyPunk
+    function _mint(address _to, uint256 _tokenID) internal {
+        (bool success, ) = address(newBunnyPunk).call{value: newBunnyPunk.platformFee()}(
+            abi.encodeWithSignature('mint(addres,string)', _to, _tokenURI(_tokenID))
+        );
+        require(success, 'Mint Failed');
+    }
+
+    /// @dev mintNewBunnyPunksForSwap from 1 ~ 690
+    /// @notice before call this function, the ownership of new BunnyPunk should be transferred to this address
+    function mintNewBunnyPunksForSwap() external onlyOwner {
+        require(newBunnyPunk.totalSupply() == 0, 'New BunnyPunk already minted');
+
+        require(
+            address(this).balance >= (newBunnyPunk.platformFee()) * 690,
+            'Insufficient funds to mint'
+        );
+        for (uint256 i = 0; i < 690; i++) {
+            _mint(address(this), i);
+        }
+        mintedBunnyBunks = 690;
+
+        emit NewBunnyPunksMinted(address(this), mintedBunnyBunks, block.number);
+    }
+
+    /// @dev setApprovalOldBunnyPunksForAll
     /// @param _approved status of approve or not
     /// @notice user will approve this swap contract
-    function setApprovalOldNFTsForAll(bool _approved) external {
+    function setApprovalOldBunnyPunksForAll(bool _approved) external {
         oldBunnyPunk.setApprovalForAll(address(this), _approved);
 
         emit SetApprovalOldBunnyPunk(msg.sender, _approved, block.number);
     }
 
-    /// @dev mintNewBunnyPunks from 1 ~ 690
-    /// @param _tokenUris the array of token URIs
-    /// @notice before call this function, the ownership of new BunnyPunk should be transferred to this address
-    /// this function should be called before any mints of new BunnyPunk to match token IDs from 1 ~ 690
-    /// after this function is successfully called, transferNewBunnyPunkOwnership function should be called to revote ownership of new BunnyPunk
-    function mintNewBunnyPunks(string[] memory _tokenUris) external onlyOwner {
-        require(_tokenUris.length == 690, 'Invalid Data');
-        require(!isNewBunnyPunkMinted, 'Already minted');
-        require(newBunnyPunk.totalSupply() == 0, 'New BunnyPunk already minted');
+    /// @dev mint new BunnyPunk
+    function mint() external payable {
+        require(newBunnyPunk.totalSupply() >= 690, 'mintNewBunnyPunksForSwap not called yet');
+        require(newBunnyPunk.totalSupply() <= 2280, 'All PunnyPunks are mintted');
 
-        uint256 index;
-        for (index = 1; index <= 690; index++) {
-            newBunnyPunk.mint(address(this), _tokenUris[index]);
-        }
-        isNewBunnyPunkMinted = true;
+        uint256 platformFee = newBunnyPunk.platformFee();
+        require(msg.value >= platformFee, 'Insufficient funds to mint.');
 
-        emit NewBunnyPunksMinted(address(this), index, block.number);
+        _mint(msg.sender, mintedBunnyBunks);
+        mintedBunnyBunks++;
+
+        emit NewBunnyPunksMinted(address(this), 1, block.number);
     }
 
     /// @dev batchSwap BunnyPunks
@@ -107,11 +142,23 @@ contract PhantzSwap is Ownable {
     }
 
     /// @dev transferNewBunnyPunkOwnership
-    /// @notice revoke BunnyPunkOwnership after mint 690 inital NFTs
+    /// @notice revoke BunnyPunkOwnership after mint 690 inital BunnyPunks
     function transferNewBunnyPunkOwnership(address _newOwner) public onlyOwner {
         require(_newOwner != address(0), 'Invalid User');
         newBunnyPunk.transferOwnership(_newOwner);
 
         emit BunnyPunkOwnerShipTransfered(_newOwner, block.number);
+    }
+
+    /// @dev withdrawRemainingEther
+    /// @notice this will withdraw all remaining ether
+    function withdrawRemainingEther(address payable _to) external onlyOwner {
+        require(_to != address(0), 'Invalid address');
+
+        uint256 remainingBalance = address(this).balance;
+        (bool success, ) = _to.call{value: remainingBalance}('');
+        require(success, 'Transfer failed');
+
+        emit WithdrawRemainingBalance(_to, remainingBalance, block.number);
     }
 }

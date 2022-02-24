@@ -17,5 +17,7 @@ interface INewBunnyPunk {
         uint256 tokenId
     ) external;
 
+    function platformFee() external returns (uint256);
+
     function mint(address _to, string calldata _tokenUri) external;
 }

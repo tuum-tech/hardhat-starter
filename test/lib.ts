@@ -5,7 +5,8 @@ import { assert } from 'chai';
 import { PhanzNFTV2, MockFeedsNFTSticker } from '../types';
 import { EthereumAddress } from '../helpers/types';
 import { deployPhanzNFTV2, deployMockFeedsNFTSticker } from '../helpers/contract';
-import { config } from '../helpers/constant';
+import { config, oldTokenIds as allAldTokenIds } from '../helpers/constant';
+
 export interface IAccount {
   address: EthereumAddress;
   signer: Signer;
@@ -28,10 +29,7 @@ const testVars: TestVars = {
 
 export const swapCount = 10;
 
-export const oldTokenIds = Array.from(
-  { length: swapCount },
-  (_, x) => `1005538507995874231698244690956173409956900276060183293484729026528219621285${x}`
-);
+export const oldTokenIds = allAldTokenIds.slice(0, 10);
 
 export const latestTime = async () => (await ethers.provider.getBlock('latest')).timestamp;
 

@@ -2,10 +2,10 @@ import { deployments, ethers, getNamedAccounts } from 'hardhat';
 import { Signer, Wallet } from 'ethers';
 import { assert } from 'chai';
 
-import { Greeter } from '../types';
+import { PhanzNFTV2, MockFeedsNFTSticker } from '../types';
 import { EthereumAddress } from '../helpers/types';
-import { getGreeterDeployment, deployGreeter } from '../helpers/contract';
-
+import { deployPhanzNFTV2, deployMockFeedsNFTSticker } from '../helpers/contract';
+import { config } from '../helpers/constant';
 export interface IAccount {
   address: EthereumAddress;
   signer: Signer;
@@ -13,23 +13,56 @@ export interface IAccount {
 }
 
 export interface TestVars {
-  Greeter: Greeter;
+  PhanzNFTV2: PhanzNFTV2;
+  FeedsNFTSticker: MockFeedsNFTSticker;
   accounts: IAccount[];
   team: IAccount;
 }
 
 const testVars: TestVars = {
-  Greeter: {} as Greeter,
+  PhanzNFTV2: {} as PhanzNFTV2,
+  FeedsNFTSticker: {} as MockFeedsNFTSticker,
   accounts: {} as IAccount[],
   team: {} as IAccount,
 };
 
+export const swapCount = 10;
+
+export const oldTokenIds = Array.from(
+  { length: swapCount },
+  (_, x) => `1005538507995874231698244690956173409956900276060183293484729026528219621285${x}`
+);
+
+export const latestTime = async () => (await ethers.provider.getBlock('latest')).timestamp;
+
 const setupOtherTestEnv = async (vars: TestVars) => {
   // setup other test env
+  const FeedsNFTSticker = await deployMockFeedsNFTSticker();
+  await FeedsNFTSticker.initialize();
+
+  const PhanzNFTV2 = await deployPhanzNFTV2([
+    config.name,
+    config.symbol,
+    config.auction,
+    config.marketplace,
+    config.bundleMarketplace,
+    config.platformFee,
+    config.feeReceipient,
+    FeedsNFTSticker.address,
+    swapCount,
+  ]);
+
+  const {
+    accounts: [admin, oldNFTOwner, frank, alice],
+  } = vars;
+
+  for (let i = 0; i < swapCount; i++) {
+    await FeedsNFTSticker.connect(oldNFTOwner.signer).mint(oldTokenIds[i], 1, '', '10000', '');
+  }
 
   return {
-    Greeter: await deployGreeter('greeting'),
-    // Greeter: await getGreeterDeployment(),
+    FeedsNFTSticker,
+    PhanzNFTV2,
   };
 };
 

@@ -37,11 +37,11 @@ export default {
     outDir: 'types/',
     target: 'ethers-v5',
   },
-  contractSizer: {
-    alphaSort: true,
-    runOnCompile: true,
-    disambiguatePaths: false,
-  },
+  // contractSizer: {
+  //   alphaSort: true,
+  //   runOnCompile: true,
+  //   disambiguatePaths: false,
+  // },
   namedAccounts: {
     deployer: 0,
     team: 1, // @TODO replace with proper address

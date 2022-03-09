@@ -1,6 +1,6 @@
-import { deployments, ethers, waffle, getNamedAccounts } from 'hardhat';
+import { deployments, ethers } from 'hardhat';
 import { Contract } from 'ethers';
-import { Greeter } from '../types';
+import { PhanzNFTV2, MockFeedsNFTSticker } from '../types';
 import { ContractId } from './types';
 
 export const deployContract = async <ContractType extends Contract>(
@@ -20,15 +20,19 @@ export const deployContract = async <ContractType extends Contract>(
   return contract;
 };
 
-export const deployGreeter = async (_greeting: string) => {
-  return await deployContract<Greeter>('Greeter', [_greeting]);
+export const deployPhanzNFTV2 = async (params: any[]) => {
+  return await deployContract<PhanzNFTV2>('PhanzNFTV2', params);
 };
 
-export const getGreeterDeployment = async (): Promise<Greeter> => {
+export const getPhanzNFTV2Deployment = async (): Promise<PhanzNFTV2> => {
   return (await ethers.getContractAt(
-    ContractId.Greeter,
+    ContractId.PhanzNFTV2,
     (
-      await deployments.get(ContractId.Greeter)
+      await deployments.get(ContractId.PhanzNFTV2)
     ).address
-  )) as Greeter;
+  )) as PhanzNFTV2;
+};
+
+export const deployMockFeedsNFTSticker = async () => {
+  return await deployContract<MockFeedsNFTSticker>('MockFeedsNFTSticker', []);
 };

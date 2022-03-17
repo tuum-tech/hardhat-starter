@@ -2,9 +2,9 @@ import { deployments, ethers, getNamedAccounts } from 'hardhat';
 import { Signer, Wallet } from 'ethers';
 import { assert } from 'chai';
 
-import { PhanzNFTV2, MockFeedsNFTSticker } from '../types';
+import { PhantzNFTV2, MockFeedsNFTSticker } from '../types';
 import { EthereumAddress } from '../helpers/types';
-import { deployPhanzNFTV2, deployMockFeedsNFTSticker } from '../helpers/contract';
+import { deployPhantzNFTV2, deployMockFeedsNFTSticker } from '../helpers/contract';
 import { config, oldTokenIds as allAldTokenIds } from '../helpers/constant';
 
 export interface IAccount {
@@ -14,14 +14,14 @@ export interface IAccount {
 }
 
 export interface TestVars {
-  PhanzNFTV2: PhanzNFTV2;
+  PhantzNFTV2: PhantzNFTV2;
   FeedsNFTSticker: MockFeedsNFTSticker;
   accounts: IAccount[];
   team: IAccount;
 }
 
 const testVars: TestVars = {
-  PhanzNFTV2: {} as PhanzNFTV2,
+  PhantzNFTV2: {} as PhantzNFTV2,
   FeedsNFTSticker: {} as MockFeedsNFTSticker,
   accounts: {} as IAccount[],
   team: {} as IAccount,
@@ -38,7 +38,7 @@ const setupOtherTestEnv = async (vars: TestVars) => {
   const FeedsNFTSticker = await deployMockFeedsNFTSticker();
   await FeedsNFTSticker.initialize();
 
-  const PhanzNFTV2 = await deployPhanzNFTV2([
+  const PhantzNFTV2 = await deployPhantzNFTV2([
     config.name,
     config.symbol,
     config.auction,
@@ -60,7 +60,7 @@ const setupOtherTestEnv = async (vars: TestVars) => {
 
   return {
     FeedsNFTSticker,
-    PhanzNFTV2,
+    PhantzNFTV2,
   };
 };
 

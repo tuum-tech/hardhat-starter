@@ -1,5 +1,5 @@
 export enum ContractId {
-  PhanzNFTV2 = 'PhanzNFTV2',
+  PhantzNFTV2 = 'PhantzNFTV2',
   MockFeedsNFTSticker = 'MockFeedsNFTSticker',
 }
 

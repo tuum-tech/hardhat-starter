@@ -1,1 +1,1 @@
-# PhanzNFTV2 contract
+# PhantzNFTV2 contract

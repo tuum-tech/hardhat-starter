@@ -4,16 +4,16 @@ pragma solidity ^0.8.0;
 import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 import '@openzeppelin/contracts/utils/Strings.sol';
-
 import '@openzeppelin/contracts/access/Ownable.sol';
-import 'hardhat/console.sol';
+
+import './interfaces/IFantomMarketplace.sol';
 import './interfaces/IFeedsNFTSticker.sol';
 import './util/Initializable.sol';
 
 /**
- * @title PhanzNFTV2
+ * @title PhantzNFTV2
  */
-contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
+contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     using Strings for uint256;
 
     /// @dev Events of the contract
@@ -37,9 +37,14 @@ contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     /// @notice Feeds NFT Sticker(FSTK), FeedsContractProxy
     IFeedsNFTSticker public feesNFTSticker;
 
-    mapping(uint256 => uint256) private _phantzToFSTKTokenIds;
+    /// @notice old tokenId => new tokenId
+    mapping(uint256 => uint256) private _oldToNewTokenIds;
 
+    /// @notice token amounts to be swapped
     uint256 private immutable swapCount;
+
+    /// @notice minters of NFTs
+    mapping(uint256 => address) public minters;
 
     /// @notice Contract constructor
     constructor(
@@ -50,7 +55,7 @@ contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         address _bundleMarketplace,
         uint256 _platformFee,
         address payable _feeReceipient,
-        IFeedsNFTSticker _feesNFTSticker,
+        address _feesNFTSticker,
         uint256 _swapCount
     ) public ERC721(_name, _symbol) {
         auction = _auction;
@@ -58,7 +63,7 @@ contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         bundleMarketplace = _bundleMarketplace;
         platformFee = _platformFee;
         feeReceipient = _feeReceipient;
-        feesNFTSticker = _feesNFTSticker;
+        feesNFTSticker = IFeedsNFTSticker(_feesNFTSticker);
         swapCount = _swapCount;
     }
 
@@ -97,7 +102,7 @@ contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         return
             string(
                 abi.encodePacked(
-                    'https://ipfs.ela.city/ipfs/QmVZeNx9AD2J9xKohfipG76hJ2JTVpSjXMfN3GTs9mxXxp/', // baseURI
+                    'ipfs://QmUaG9DJMQprYoSWXp3X1V1YMS5E37pjt4MkQGpQtgZkeK/', // baseURI
                     tokenId.toString(),
                     '.json'
                 )
@@ -149,6 +154,10 @@ contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         // Send FTM fee to fee recipient
         (bool success, ) = feeReceipient.call{value: msg.value}('');
         require(success, 'Transfer failed');
+
+        // register Minter
+        minters[newTokenId] = _msgSender();
+
         emit Minted(newTokenId, _to, tokenURI(newTokenId), _msgSender());
     }
 
@@ -201,7 +210,13 @@ contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
             _incrementTokenId();
 
             // mapping new & old Phantz tokenID
-            _phantzToFSTKTokenIds[oldTokenIds[i]] = newTokenId;
+            _oldToNewTokenIds[oldTokenIds[i]] = newTokenId;
+
+            // register minter
+            minters[newTokenId] = IFantomMarketplace(marketplace).minters(
+                address(feesNFTSticker),
+                oldTokenIds[i]
+            );
         }
 
         emit Initialized();
@@ -213,7 +228,7 @@ contract PhanzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     function swap(uint256 _oldTokenId) external {
         require(_currentTokenId >= swapCount, 'Should mint NFTs for swap first.');
 
-        uint256 newTokenId = _phantzToFSTKTokenIds[_oldTokenId];
+        uint256 newTokenId = _oldToNewTokenIds[_oldTokenId];
         require(newTokenId > 0 && newTokenId <= swapCount, 'Not swappable tokenID');
 
         address user = _msgSender();

@@ -6,7 +6,6 @@ import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
 import '@openzeppelin/contracts/utils/Strings.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
 
-import './interfaces/IFantomMarketplace.sol';
 import './interfaces/IFeedsNFTSticker.sol';
 import './util/Initializable.sol';
 
@@ -42,9 +41,6 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
 
     /// @notice token amounts to be swapped
     uint256 private immutable swapCount;
-
-    /// @notice minters of NFTs
-    mapping(uint256 => address) public minters;
 
     /// @notice Contract constructor
     constructor(
@@ -155,9 +151,6 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         (bool success, ) = feeReceipient.call{value: msg.value}('');
         require(success, 'Transfer failed');
 
-        // register Minter
-        minters[newTokenId] = _msgSender();
-
         emit Minted(newTokenId, _to, tokenURI(newTokenId), _msgSender());
     }
 
@@ -211,12 +204,6 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
 
             // mapping new & old Phantz tokenID
             _oldToNewTokenIds[oldTokenIds[i]] = newTokenId;
-
-            // register minter
-            minters[newTokenId] = IFantomMarketplace(marketplace).minters(
-                address(feesNFTSticker),
-                oldTokenIds[i]
-            );
         }
 
         emit Initialized();

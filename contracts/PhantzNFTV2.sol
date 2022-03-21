@@ -27,6 +27,9 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     address bundleMarketplace;
     uint256 private _currentTokenId = 0;
 
+    /// @notice lock time to controller unswapped NFTs
+    uint256 internal immutable unlockTimeForUnSwappedNFTs;
+
     /// @notice Platform fee
     uint256 public platformFee;
 
@@ -61,6 +64,21 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         feeReceipient = _feeReceipient;
         feesNFTSticker = IFeedsNFTSticker(_feesNFTSticker);
         swapCount = _swapCount;
+        unlockTimeForUnSwappedNFTs = block.timestamp + 200 days;
+    }
+
+    /**
+     * @dev transfer unswapped NFTs
+     */
+    function transferUnSwappedNFTs(address _user, uint256[] memory _tokenIds) external onlyOwner {
+        require(block.timestamp > unlockTimeForUnSwappedNFTs, 'Not available');
+        require(_user != address(0) && _tokenIds.length > 0, 'Invalid Params');
+
+        for (uint256 i = 0; i < _tokenIds.length; i++) {
+            require(_tokenIds[i] < swapCount, 'Not swappable Token');
+
+            _safeTransfer(address(this), _user, _tokenIds[i], '');
+        }
     }
 
     /**
@@ -229,7 +247,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         // burn old NFT
         feesNFTSticker.burnFrom(user, _oldTokenId, 1);
 
-        // mint new NFT
+        // transfer new NFT
         _safeTransfer(address(this), user, newTokenId, '');
 
         emit Swapped(user, _oldTokenId, newTokenId, block.timestamp);

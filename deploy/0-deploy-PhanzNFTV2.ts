@@ -14,15 +14,12 @@ const deployPhantzNFTV2: DeployFunction = async function (hre: HardhatRuntimeEnv
   await deploy('PhantzNFTV2', {
     from: deployer,
     args: [
-      config.name,
-      config.symbol,
       config.auction,
       config.marketplace,
       config.bundleMarketplace,
       config.platformFee,
       config.feeReceipient,
       config.feedNFTSticker,
-      config.swapCount,
     ],
     log: true,
   });

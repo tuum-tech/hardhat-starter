@@ -1,7 +1,8 @@
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 
-import { runTestSuite, TestVars, oldTokenIds, swapCount, latestTime } from './lib';
+import { runTestSuite, TestVars, swapCount, latestTime, premintSwapNFTs } from './lib';
+import { oldTokenIds } from '../helpers/constant';
 
 runTestSuite('PhantzNFTV2', (vars: TestVars) => {
   it('meta', async () => {
@@ -10,7 +11,7 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
       accounts: [admin, bob, frank, alice],
     } = vars;
 
-    await PhantzNFTV2.initialize(oldTokenIds);
+    await premintSwapNFTs(vars);
     await PhantzNFTV2.connect(frank.signer).mint(alice.address, {
       value: ethers.utils.parseEther('0.1'),
     });
@@ -32,7 +33,7 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
         'Should mint NFTs for swap first.'
       );
 
-      await PhantzNFTV2.initialize(oldTokenIds);
+      await premintSwapNFTs(vars);
 
       await expect(PhantzNFTV2.connect(frank.signer).mint(frank.address)).to.be.revertedWith(
         'Insufficient funds to mint.'
@@ -51,7 +52,7 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
         accounts: [admin, bob, frank, alice],
       } = vars;
 
-      await PhantzNFTV2.initialize(oldTokenIds);
+      await premintSwapNFTs(vars);
 
       const newTokenURI = `ipfs://QmUaG9DJMQprYoSWXp3X1V1YMS5E37pjt4MkQGpQtgZkeK/${
         swapCount + 1
@@ -79,7 +80,7 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
 
       // try swap without minting 690 NFTs
       await expect(PhantzNFTV2.swap(1)).to.be.revertedWith('Should mint NFTs for swap first.');
-      await PhantzNFTV2.initialize(oldTokenIds);
+      await premintSwapNFTs(vars);
 
       // try swap with invalid otkneID
       await expect(PhantzNFTV2.swap(1)).to.be.revertedWith('Not swappable tokenID');
@@ -101,7 +102,7 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
         accounts: [admin, oldNFTOwner],
       } = vars;
 
-      await PhantzNFTV2.initialize(oldTokenIds);
+      await premintSwapNFTs(vars);
 
       // approve first to burn old NFT
       await FeedsNFTSticker.connect(oldNFTOwner.signer).setApprovalForAll(

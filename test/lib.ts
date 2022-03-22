@@ -5,7 +5,7 @@ import { assert } from 'chai';
 import { PhantzNFTV2, MockFeedsNFTSticker } from '../types';
 import { EthereumAddress } from '../helpers/types';
 import { deployPhantzNFTV2, deployMockFeedsNFTSticker } from '../helpers/contract';
-import { config, oldTokenIds as allAldTokenIds } from '../helpers/constant';
+import { config, oldTokenIds } from '../helpers/constant';
 
 export interface IAccount {
   address: EthereumAddress;
@@ -27,11 +27,18 @@ const testVars: TestVars = {
   team: {} as IAccount,
 };
 
-export const swapCount = 10;
-
-export const oldTokenIds = allAldTokenIds.slice(0, 10);
+export const swapCount = 690;
 
 export const latestTime = async () => (await ethers.provider.getBlock('latest')).timestamp;
+
+export const premintSwapNFTs = async (vars: TestVars) => {
+  const { PhantzNFTV2 } = vars;
+  const oldTokenIds1 = oldTokenIds.slice(0, swapCount / 2);
+  await PhantzNFTV2.premint(oldTokenIds1);
+
+  const oldTokenIds2 = oldTokenIds.slice(swapCount / 2, swapCount + 1);
+  await PhantzNFTV2.premint(oldTokenIds2);
+};
 
 const setupOtherTestEnv = async (vars: TestVars) => {
   // setup other test env
@@ -39,15 +46,12 @@ const setupOtherTestEnv = async (vars: TestVars) => {
   await FeedsNFTSticker.initialize();
 
   const PhantzNFTV2 = await deployPhantzNFTV2([
-    config.name,
-    config.symbol,
     config.auction,
     config.marketplace,
     config.bundleMarketplace,
     config.platformFee,
     config.feeReceipient,
     FeedsNFTSticker.address,
-    swapCount,
   ]);
 
   const {

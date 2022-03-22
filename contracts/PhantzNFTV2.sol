@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: Unlicense
+//SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
 import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
@@ -7,16 +7,14 @@ import '@openzeppelin/contracts/utils/Strings.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
 
 import './interfaces/IFeedsNFTSticker.sol';
-import './util/Initializable.sol';
 
 /**
  * @title PhantzNFTV2
  */
-contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
+contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
     using Strings for uint256;
 
-    /// @dev Events of the contract
-    event Initialized();
+    event PreMinted(uint256[] _oldTokenIds, uint256 _currentTokenId);
     event Minted(uint256 _tokenId, address _beneficiary, string _tokenUri, address _minter);
     event UpdatePlatformFee(uint256 _platformFee);
     event UpdateFeeRecipient(address payable _feeRecipient);
@@ -26,51 +24,56 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     address marketplace;
     address bundleMarketplace;
     uint256 private _currentTokenId = 0;
+    bool public readyToMint;
 
-    /// @notice lock time to controller unswapped NFTs
+    /// @dev lock time to controller unswapped NFTs
     uint256 internal immutable unlockTimeForUnSwappedNFTs;
 
-    /// @notice Platform fee
+    /// @dev Platform fee
     uint256 public platformFee;
 
-    /// @notice Platform fee receipient
+    /// @dev Platform fee receipient
     address payable public feeReceipient;
 
-    /// @notice Feeds NFT Sticker(FSTK), FeedsContractProxy
+    /// @dev Feeds NFT Sticker(FSTK), FeedsContractProxy
     IFeedsNFTSticker public feesNFTSticker;
 
-    /// @notice old tokenId => new tokenId
+    /// @dev old tokenId => new tokenId
     mapping(uint256 => uint256) private _oldToNewTokenIds;
 
-    /// @notice token amounts to be swapped
-    uint256 private immutable swapCount;
+    /// @dev token amounts to be swapped
+    uint256 private immutable swapCount = 690;
 
-    /// @notice Contract constructor
     constructor(
-        string memory _name,
-        string memory _symbol,
         address _auction,
         address _marketplace,
         address _bundleMarketplace,
         uint256 _platformFee,
         address payable _feeReceipient,
-        address _feesNFTSticker,
-        uint256 _swapCount
-    ) public ERC721(_name, _symbol) {
+        address _feesNFTSticker
+    ) ERC721('Phantz', 'Ph') {
         auction = _auction;
         marketplace = _marketplace;
         bundleMarketplace = _bundleMarketplace;
         platformFee = _platformFee;
         feeReceipient = _feeReceipient;
         feesNFTSticker = IFeedsNFTSticker(_feesNFTSticker);
-        swapCount = _swapCount;
-        unlockTimeForUnSwappedNFTs = block.timestamp + 200 days;
+        unlockTimeForUnSwappedNFTs = block.timestamp + 365 days;
+    }
+
+    modifier afterPreminted() {
+        require(readyToMint, 'Not pre-mint swap NFTs yet');
+        _;
     }
 
     /**
      * @dev transfer unswapped NFTs
      */
-    function transferUnSwappedNFTs(address _user, uint256[] memory _tokenIds) external onlyOwner {
+    function transferUnSwappedNFTs(address _user, uint256[] memory _tokenIds)
+        external
+        onlyOwner
+        afterPreminted
+    {
         require(block.timestamp > unlockTimeForUnSwappedNFTs, 'Not available');
         require(_user != address(0) && _tokenIds.length > 0, 'Invalid Params');
 
@@ -82,7 +85,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     }
 
     /**
-     @notice Method for updating platform fee
+     @dev Method for updating platform fee
      @dev Only admin
      @param _platformFee uint256 the platform fee to set
      */
@@ -92,7 +95,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     }
 
     /**
-     @notice Method for updating platform fee address
+     @dev Method for updating platform fee address
      @dev Only admin
      @param _feeReceipient payable address the address to sends the funds to
      */
@@ -106,7 +109,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
         address from,
         uint256 tokenId,
         bytes calldata data
-    ) public override returns (bytes4) {
+    ) public pure override returns (bytes4) {
         return IERC721Receiver.onERC721Received.selector;
     }
 
@@ -157,7 +160,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
      * @dev Mints a token to an address with a tokenURI.
      * @param _to address of the future owner of the token
      */
-    function mint(address _to) external payable {
+    function mint(address _to) external payable afterPreminted {
         require(_currentTokenId >= swapCount, 'Should mint NFTs for swap first.');
         require(msg.value >= platformFee, 'Insufficient funds to mint.');
 
@@ -173,7 +176,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     }
 
     /**
-    @notice Burns a DigitalaxGarmentNFT, releasing any composed 1155 tokens held by the token itself
+    @dev Burns a DigitalaxGarmentNFT, releasing any composed 1155 tokens held by the token itself
     @dev Only the owner or an approved sender can call this method
     @param _tokenId the token ID to burn
     */
@@ -210,11 +213,13 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
     /**
      * @dev will mint swapCount NFTs for swap
      */
-    function initialize(uint256[] memory oldTokenIds) external initializer {
-        require(_currentTokenId == 0, 'Some tokens are minted');
-        require(oldTokenIds.length == swapCount, 'phantzTokenIDs invalid');
+    function premint(uint256[] memory oldTokenIds) external onlyOwner {
+        require(_currentTokenId <= swapCount, 'No more tokens to swap');
+        require(oldTokenIds.length > 0, 'Invalid TokenIds');
 
-        for (uint256 i = 0; i < swapCount; i++) {
+        for (uint256 i = 0; i < oldTokenIds.length; i++) {
+            require(_oldToNewTokenIds[oldTokenIds[i]] == 0, 'Already minted to swap');
+
             // pre-mint NFT
             uint256 newTokenId = _getNextTokenId();
             _safeMint(address(this), newTokenId);
@@ -224,13 +229,17 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable, Initializable {
             _oldToNewTokenIds[oldTokenIds[i]] = newTokenId;
         }
 
-        emit Initialized();
+        if (_currentTokenId == swapCount) {
+            readyToMint = true;
+        }
+
+        emit PreMinted(oldTokenIds, _currentTokenId);
     }
 
     /**
      * @dev swap old swapCount NFTs with new
      */
-    function swap(uint256 _oldTokenId) external {
+    function swap(uint256 _oldTokenId) external afterPreminted {
         require(_currentTokenId >= swapCount, 'Should mint NFTs for swap first.');
 
         uint256 newTokenId = _oldToNewTokenIds[_oldTokenId];

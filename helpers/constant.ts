@@ -1,13 +1,10 @@
 export const config = {
-  name: 'Phantz',
-  symbol: 'Ph',
   auction: '0x4E3679FE16E91507e5C75E8ff8e55CaA03407430',
   marketplace: '0x0Dec73b5C65f6aaC8F95Aa908291627e490c1eF8',
   bundleMarketplace: '0xFaDD24491aFE8582FdD83bCDdb71E4875358f87D',
   platformFee: '100000000000000000', // 0.1ELA
   feeReceipient: '0x44016ed8638f5B517a5beC7a722A56d1DEBefef7',
   feedNFTSticker: '0x020c7303664bc88ae92cE3D380BF361E03B78B81',
-  swapCount: 690,
 };
 
 export const oldTokenIds = [

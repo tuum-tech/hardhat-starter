@@ -8,9 +8,8 @@ export const deployContract = async <ContractType extends Contract>(
   args: any[],
   libraries?: {}
 ) => {
-  const signers = await hre.ethers.getSigners();
   const contract = (await (
-    await hre.ethers.getContractFactory(contractName, signers[0], {
+    await ethers.getContractFactory(contractName, {
       libraries: {
         ...libraries,
       },

@@ -7,16 +7,44 @@ import { ethers } from 'hardhat';
 import { oldTokenIds } from '../helpers/constant';
 
 async function main() {
+  // FeedsNFTSticker
+  const FeedsNFTSticker = await ethers.getContractFactory('MockFeedsNFTSticker');
+  const feedsNFTSticker = await FeedsNFTSticker.attach(
+    '0x020c7303664bc88ae92cE3D380BF361E03B78B81'
+  );
+
+  console.log(
+    await feedsNFTSticker.balanceOf(
+      '0xabB6D4a1015e291b1bc71e7e56ff2c9204665b07',
+      '46528210778950666215236991069464782653137148637860766160708804757362426446907'
+    ),
+    await feedsNFTSticker.isApprovedForAll(
+      '0xabB6D4a1015e291b1bc71e7e56ff2c9204665b07',
+      '0xfDdE60866508263e30C769e8592BB0f8C3274ba7'
+    )
+  );
+
   const PhantzNFTV2Contract = await ethers.getContractFactory('PhantzNFTV2');
-  const contract = await PhantzNFTV2Contract.attach('0x0f684b9f2c9c43d97dff54cb3f50ad383d7e8f8f');
+  const phantzContract = await PhantzNFTV2Contract.attach(
+    '0xfDdE60866508263e30C769e8592BB0f8C3274ba7'
+  );
 
-  const oldTokenIds1 = oldTokenIds.slice(0, 345);
-  await contract.premint(oldTokenIds1);
-  console.log('first 345 NFTs are minted to swap');
+  // Pre-mint 690 NFTS
+  for (let i = 0; i < 6; i++) {
+    await phantzContract.premint(oldTokenIds.slice(i * 100, (i + 1) * 100));
+    console.log(`${i + 1}th 100 NFTs are minted to swap`);
+  }
 
-  const oldTokenIds2 = oldTokenIds.slice(345, 691);
-  await contract.premint(oldTokenIds2);
-  console.log('second 345 NFTs are minted to swap');
+  await phantzContract.premint(oldTokenIds.slice(600, 690));
+  console.log('last 690 NFTs are minted');
+
+  // check if mints are available
+  console.log('ready To mint?', await phantzContract.readyToMint());
+
+  // check if swap is working
+  await phantzContract.swap(
+    '46528210778950666215236991069464782653137148637860766160708804757362426446907'
+  );
 }
 
 // We recommend this pattern to be able to use async/await everywhere

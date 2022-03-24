@@ -3,15 +3,16 @@ pragma solidity ^0.8.0;
 
 import '@openzeppelin/contracts/token/ERC721/ERC721.sol';
 import '@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol';
+import '@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol';
+
 import '@openzeppelin/contracts/utils/Strings.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
-
 import './interfaces/IFeedsNFTSticker.sol';
 
 /**
  * @title PhantzNFTV2
  */
-contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
+contract PhantzNFTV2 is IERC721Receiver, IERC1155Receiver, ERC721, Ownable {
     using Strings for uint256;
 
     event PreMinted(uint256[] _oldTokenIds, uint256 _currentTokenId);
@@ -26,6 +27,9 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
     uint256 private _currentTokenId = 0;
     bool public readyToMint;
 
+    /// @dev max supply
+    uint256 public constant maxSupply = 2822;
+
     /// @dev lock time to controller unswapped NFTs
     uint256 internal immutable unlockTimeForUnSwappedNFTs;
 
@@ -36,13 +40,13 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
     address payable public feeReceipient;
 
     /// @dev Feeds NFT Sticker(FSTK), FeedsContractProxy
-    IFeedsNFTSticker public feesNFTSticker;
+    IFeedsNFTSticker public feedsNFTSticker;
 
     /// @dev old tokenId => new tokenId
     mapping(uint256 => uint256) private _oldToNewTokenIds;
 
     /// @dev token amounts to be swapped
-    uint256 private immutable swapCount = 690;
+    uint256 private immutable swapCount;
 
     constructor(
         address _auction,
@@ -50,15 +54,17 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
         address _bundleMarketplace,
         uint256 _platformFee,
         address payable _feeReceipient,
-        address _feesNFTSticker
-    ) ERC721('Phantz', 'Ph') {
+        address _feedsNFTSticker,
+        uint256 _swapCount
+    ) ERC721('Phantz', 'PH') {
         auction = _auction;
         marketplace = _marketplace;
         bundleMarketplace = _bundleMarketplace;
         platformFee = _platformFee;
         feeReceipient = _feeReceipient;
-        feesNFTSticker = IFeedsNFTSticker(_feesNFTSticker);
+        feedsNFTSticker = IFeedsNFTSticker(_feedsNFTSticker);
         unlockTimeForUnSwappedNFTs = block.timestamp + 365 days;
+        swapCount = _swapCount;
     }
 
     modifier afterPreminted() {
@@ -113,6 +119,26 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
         return IERC721Receiver.onERC721Received.selector;
     }
 
+    function onERC1155Received(
+        address operator,
+        address from,
+        uint256 id,
+        uint256 value,
+        bytes calldata data
+    ) public pure override returns (bytes4) {
+        return IERC1155Receiver.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(
+        address operator,
+        address from,
+        uint256[] calldata ids,
+        uint256[] calldata values,
+        bytes calldata data
+    ) public pure override returns (bytes4) {
+        return IERC1155Receiver.onERC1155BatchReceived.selector;
+    }
+
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         require(_exists(tokenId), 'ERC721Metadata: URI query for nonexistent token');
 
@@ -130,7 +156,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
      * @dev calculates the next token ID based on value of _currentTokenId
      * @return uint256 for the next token ID
      */
-    function _getNextTokenId() private view returns (uint256) {
+    function getNextTokenId() public view returns (uint256) {
         return _currentTokenId + 1;
     }
 
@@ -161,10 +187,11 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
      * @param _to address of the future owner of the token
      */
     function mint(address _to) external payable afterPreminted {
-        require(_currentTokenId >= swapCount, 'Should mint NFTs for swap first.');
         require(msg.value >= platformFee, 'Insufficient funds to mint.');
 
-        uint256 newTokenId = _getNextTokenId();
+        uint256 newTokenId = getNextTokenId();
+        require(newTokenId <= maxSupply, 'Override Max Supply');
+
         _safeMint(_to, newTokenId);
         _incrementTokenId();
 
@@ -221,7 +248,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
             require(_oldToNewTokenIds[oldTokenIds[i]] == 0, 'Already minted to swap');
 
             // pre-mint NFT
-            uint256 newTokenId = _getNextTokenId();
+            uint256 newTokenId = getNextTokenId();
             _safeMint(address(this), newTokenId);
             _incrementTokenId();
 
@@ -240,21 +267,25 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
      * @dev swap old swapCount NFTs with new
      */
     function swap(uint256 _oldTokenId) external afterPreminted {
-        require(_currentTokenId >= swapCount, 'Should mint NFTs for swap first.');
-
         uint256 newTokenId = _oldToNewTokenIds[_oldTokenId];
         require(newTokenId > 0 && newTokenId <= swapCount, 'Not swappable tokenID');
 
         address user = _msgSender();
+
+        require(feedsNFTSticker.balanceOf(user, _oldTokenId) > 0, 'No NFT to swap');
         require(
-            feesNFTSticker.isApprovedForAll(user, address(this)),
+            feedsNFTSticker.isApprovedForAll(user, address(this)),
             'Should approve contract first'
         );
 
-        require(feesNFTSticker.balanceOf(user, _oldTokenId) > 0, 'No NFT to swap');
-
-        // burn old NFT
-        feesNFTSticker.burnFrom(user, _oldTokenId, 1);
+        // transfer old NFT to this contract to lock
+        feedsNFTSticker.safeTransferFromWithMemo(
+            user,
+            address(this),
+            _oldTokenId,
+            1,
+            'Transfered to locked after swap'
+        );
 
         // transfer new NFT
         _safeTransfer(address(this), user, newTokenId, '');

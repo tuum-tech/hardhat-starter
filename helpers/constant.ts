@@ -5,6 +5,7 @@ export const config = {
   platformFee: '100000000000000000', // 0.1ELA
   feeReceipient: '0x44016ed8638f5B517a5beC7a722A56d1DEBefef7',
   feedNFTSticker: '0x020c7303664bc88ae92cE3D380BF361E03B78B81',
+  swapCount: 690,
 };
 
 export const oldTokenIds = [

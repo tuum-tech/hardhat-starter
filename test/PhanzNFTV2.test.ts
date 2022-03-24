@@ -30,7 +30,7 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
       } = vars;
 
       await expect(PhantzNFTV2.connect(frank.signer).mint(frank.address)).to.be.revertedWith(
-        'Should mint NFTs for swap first.'
+        'Not pre-mint swap NFTs yet'
       );
 
       await premintSwapNFTs(vars);
@@ -79,19 +79,18 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
       expect(await FeedsNFTSticker.balanceOf(oldNFTOwner.address, oldTokenIds[0])).to.be.equal(1);
 
       // try swap without minting 690 NFTs
-      await expect(PhantzNFTV2.swap(1)).to.be.revertedWith('Should mint NFTs for swap first.');
+      await expect(PhantzNFTV2.swap(1)).to.be.revertedWith('Not pre-mint swap NFTs yet');
       await premintSwapNFTs(vars);
 
-      // try swap with invalid otkneID
+      // try swap with invalid tokenId
       await expect(PhantzNFTV2.swap(1)).to.be.revertedWith('Not swappable tokenID');
 
       // try swap without approving old NFTs
-      await expect(PhantzNFTV2.swap(oldTokenIds[0])).to.be.revertedWith(
+      await expect(PhantzNFTV2.connect(oldNFTOwner.signer).swap(oldTokenIds[0])).to.be.revertedWith(
         'Should approve contract first'
       );
 
       // try swap without old NFTs
-      await FeedsNFTSticker.setApprovalForAll(PhantzNFTV2.address, true);
       await expect(PhantzNFTV2.swap(oldTokenIds[0])).to.be.revertedWith('No NFT to swap');
     });
 
@@ -119,6 +118,7 @@ runTestSuite('PhantzNFTV2', (vars: TestVars) => {
 
       // check old NFT
       expect(await FeedsNFTSticker.balanceOf(oldNFTOwner.address, oldTokenIds[0])).to.be.equal(0);
+      expect(await FeedsNFTSticker.balanceOf(PhantzNFTV2.address, oldTokenIds[0])).to.be.equal(1);
 
       // check new NFT
       expect(await PhantzNFTV2.balanceOf(oldNFTOwner.address)).to.be.equal(1);

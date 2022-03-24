@@ -231,7 +231,7 @@ interface IERC721Metadata is IERC721 {
 
 // OpenZeppelin Contracts (last updated v4.5.0) (utils/Address.sol)
 
-pragma solidity ^0.8.1;
+pragma solidity ^0.8.0;
 
 /**
  * @dev Collection of functions related to the address type
@@ -1055,6 +1055,64 @@ contract ERC721 is Context, ERC165, IERC721, IERC721Metadata {
     ) internal virtual {}
 }
 
+// File @openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol@v4.5.0
+
+// OpenZeppelin Contracts (last updated v4.5.0) (token/ERC1155/IERC1155Receiver.sol)
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev _Available since v3.1._
+ */
+interface IERC1155Receiver is IERC165 {
+    /**
+     * @dev Handles the receipt of a single ERC1155 token type. This function is
+     * called at the end of a `safeTransferFrom` after the balance has been updated.
+     *
+     * NOTE: To accept the transfer, this must return
+     * `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))`
+     * (i.e. 0xf23a6e61, or its own function selector).
+     *
+     * @param operator The address which initiated the transfer (i.e. msg.sender)
+     * @param from The address which previously owned the token
+     * @param id The ID of the token being transferred
+     * @param value The amount of tokens being transferred
+     * @param data Additional data with no specified format
+     * @return `bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"))` if transfer is allowed
+     */
+    function onERC1155Received(
+        address operator,
+        address from,
+        uint256 id,
+        uint256 value,
+        bytes calldata data
+    ) external returns (bytes4);
+
+    /**
+     * @dev Handles the receipt of a multiple ERC1155 token types. This function
+     * is called at the end of a `safeBatchTransferFrom` after the balances have
+     * been updated.
+     *
+     * NOTE: To accept the transfer(s), this must return
+     * `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))`
+     * (i.e. 0xbc197c81, or its own function selector).
+     *
+     * @param operator The address which initiated the batch transfer (i.e. msg.sender)
+     * @param from The address which previously owned the token
+     * @param ids An array containing ids of each token being transferred (order and length must match values array)
+     * @param values An array containing amounts of each token being transferred (order and length must match ids array)
+     * @param data Additional data with no specified format
+     * @return `bytes4(keccak256("onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)"))` if transfer is allowed
+     */
+    function onERC1155BatchReceived(
+        address operator,
+        address from,
+        uint256[] calldata ids,
+        uint256[] calldata values,
+        bytes calldata data
+    ) external returns (bytes4);
+}
+
 // File @openzeppelin/contracts/access/Ownable.sol@v4.5.0
 
 // OpenZeppelin Contracts v4.4.1 (access/Ownable.sol)
@@ -1138,11 +1196,15 @@ pragma solidity ^0.8.0;
 interface IFeedsNFTSticker {
     function isApprovedForAll(address _owner, address _operator) external returns (bool);
 
-    function burnFrom(
-        address _owner,
+    function safeTransferFromWithMemo(
+        address _from,
+        address _to,
         uint256 _id,
-        uint256 _value
+        uint256 _value,
+        string memory _memo
     ) external;
+
+    function setApprovalForAll(address _operator, bool _approved) external;
 
     function balanceOf(address _owner, uint256 _id) external returns (uint256);
 }
@@ -1154,7 +1216,7 @@ pragma solidity ^0.8.0;
 /**
  * @title PhantzNFTV2
  */
-contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
+contract PhantzNFTV2 is IERC721Receiver, IERC1155Receiver, ERC721, Ownable {
     using Strings for uint256;
 
     event PreMinted(uint256[] _oldTokenIds, uint256 _currentTokenId);
@@ -1169,6 +1231,9 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
     uint256 private _currentTokenId = 0;
     bool public readyToMint;
 
+    /// @dev max supply
+    uint256 public constant maxSupply = 2822;
+
     /// @dev lock time to controller unswapped NFTs
     uint256 internal immutable unlockTimeForUnSwappedNFTs;
 
@@ -1179,13 +1244,13 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
     address payable public feeReceipient;
 
     /// @dev Feeds NFT Sticker(FSTK), FeedsContractProxy
-    IFeedsNFTSticker public feesNFTSticker;
+    IFeedsNFTSticker public feedsNFTSticker;
 
     /// @dev old tokenId => new tokenId
     mapping(uint256 => uint256) private _oldToNewTokenIds;
 
     /// @dev token amounts to be swapped
-    uint256 private immutable swapCount = 690;
+    uint256 private immutable swapCount;
 
     constructor(
         address _auction,
@@ -1193,21 +1258,32 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
         address _bundleMarketplace,
         uint256 _platformFee,
         address payable _feeReceipient,
-        address _feesNFTSticker
-    ) ERC721('Phantz', 'Ph') {
+        address _feedsNFTSticker,
+        uint256 _swapCount
+    ) ERC721('Phantz', 'PH') {
         auction = _auction;
         marketplace = _marketplace;
         bundleMarketplace = _bundleMarketplace;
         platformFee = _platformFee;
         feeReceipient = _feeReceipient;
-        feesNFTSticker = IFeedsNFTSticker(_feesNFTSticker);
+        feedsNFTSticker = IFeedsNFTSticker(_feedsNFTSticker);
         unlockTimeForUnSwappedNFTs = block.timestamp + 365 days;
+        swapCount = _swapCount;
+    }
+
+    modifier afterPreminted() {
+        require(readyToMint, 'Not pre-mint swap NFTs yet');
+        _;
     }
 
     /**
      * @dev transfer unswapped NFTs
      */
-    function transferUnSwappedNFTs(address _user, uint256[] memory _tokenIds) external onlyOwner {
+    function transferUnSwappedNFTs(address _user, uint256[] memory _tokenIds)
+        external
+        onlyOwner
+        afterPreminted
+    {
         require(block.timestamp > unlockTimeForUnSwappedNFTs, 'Not available');
         require(_user != address(0) && _tokenIds.length > 0, 'Invalid Params');
 
@@ -1247,6 +1323,26 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
         return IERC721Receiver.onERC721Received.selector;
     }
 
+    function onERC1155Received(
+        address operator,
+        address from,
+        uint256 id,
+        uint256 value,
+        bytes calldata data
+    ) public pure override returns (bytes4) {
+        return IERC1155Receiver.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(
+        address operator,
+        address from,
+        uint256[] calldata ids,
+        uint256[] calldata values,
+        bytes calldata data
+    ) public pure override returns (bytes4) {
+        return IERC1155Receiver.onERC1155BatchReceived.selector;
+    }
+
     function tokenURI(uint256 tokenId) public view override returns (string memory) {
         require(_exists(tokenId), 'ERC721Metadata: URI query for nonexistent token');
 
@@ -1264,7 +1360,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
      * @dev calculates the next token ID based on value of _currentTokenId
      * @return uint256 for the next token ID
      */
-    function _getNextTokenId() private view returns (uint256) {
+    function getNextTokenId() public view returns (uint256) {
         return _currentTokenId + 1;
     }
 
@@ -1294,11 +1390,12 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
      * @dev Mints a token to an address with a tokenURI.
      * @param _to address of the future owner of the token
      */
-    function mint(address _to) external payable {
-        require(_currentTokenId >= swapCount, 'Should mint NFTs for swap first.');
+    function mint(address _to) external payable afterPreminted {
         require(msg.value >= platformFee, 'Insufficient funds to mint.');
 
-        uint256 newTokenId = _getNextTokenId();
+        uint256 newTokenId = getNextTokenId();
+        require(newTokenId <= maxSupply, 'Override Max Supply');
+
         _safeMint(_to, newTokenId);
         _incrementTokenId();
 
@@ -1355,7 +1452,7 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
             require(_oldToNewTokenIds[oldTokenIds[i]] == 0, 'Already minted to swap');
 
             // pre-mint NFT
-            uint256 newTokenId = _getNextTokenId();
+            uint256 newTokenId = getNextTokenId();
             _safeMint(address(this), newTokenId);
             _incrementTokenId();
 
@@ -1373,22 +1470,26 @@ contract PhantzNFTV2 is IERC721Receiver, ERC721, Ownable {
     /**
      * @dev swap old swapCount NFTs with new
      */
-    function swap(uint256 _oldTokenId) external {
-        require(_currentTokenId >= swapCount, 'Should mint NFTs for swap first.');
-
+    function swap(uint256 _oldTokenId) external afterPreminted {
         uint256 newTokenId = _oldToNewTokenIds[_oldTokenId];
         require(newTokenId > 0 && newTokenId <= swapCount, 'Not swappable tokenID');
 
         address user = _msgSender();
+
+        require(feedsNFTSticker.balanceOf(user, _oldTokenId) > 0, 'No NFT to swap');
         require(
-            feesNFTSticker.isApprovedForAll(user, address(this)),
+            feedsNFTSticker.isApprovedForAll(user, address(this)),
             'Should approve contract first'
         );
 
-        require(feesNFTSticker.balanceOf(user, _oldTokenId) > 0, 'No NFT to swap');
-
-        // burn old NFT
-        feesNFTSticker.burnFrom(user, _oldTokenId, 1);
+        // transfer old NFT to this contract to lock
+        feedsNFTSticker.safeTransferFromWithMemo(
+            user,
+            address(this),
+            _oldTokenId,
+            1,
+            'Transfered to locked after swap'
+        );
 
         // transfer new NFT
         _safeTransfer(address(this), user, newTokenId, '');

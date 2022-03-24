@@ -27,7 +27,7 @@ const testVars: TestVars = {
   team: {} as IAccount,
 };
 
-export const swapCount = 690;
+export const swapCount = oldTokenIds.length;
 
 export const latestTime = async () => (await ethers.provider.getBlock('latest')).timestamp;
 
@@ -52,6 +52,7 @@ const setupOtherTestEnv = async (vars: TestVars) => {
     config.platformFee,
     config.feeReceipient,
     FeedsNFTSticker.address,
+    swapCount,
   ]);
 
   const {

@@ -703,10 +703,12 @@ contract MockFeedsNFTSticker is
         string memory _memo
     ) internal {
         require(_to != address(0x0), 'Receiver cannot be zero address');
+
         require(
             _from == msg.sender || operatorApproval[_from][msg.sender] == true,
             'Sender is not operator'
         );
+
         require(balances[_id][_from] >= _value, 'Not enough token balance');
 
         if (balances[_id][_to] <= 0 && _value > 0) {

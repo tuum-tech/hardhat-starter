@@ -20,6 +20,7 @@ const deployPhantzNFTV2: DeployFunction = async function (hre: HardhatRuntimeEnv
       config.platformFee,
       config.feeReceipient,
       config.feedNFTSticker,
+      config.swapCount,
     ],
     log: true,
   });
